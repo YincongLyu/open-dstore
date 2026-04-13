@@ -18,3 +18,9 @@ build_script/dynamic_vfs.conf.init
 build_script/guc.json
 build_script/dstore_conf.json
 tests/unittest/ut_config/ut_isoland_start.json
+
+.codex/
+.claude/
+.opencode/
+.specify/
+

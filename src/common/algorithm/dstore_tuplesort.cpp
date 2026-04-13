@@ -21,6 +21,10 @@
  *
  * ---------------------------------------------------------------------------------------
  */
+#include <dirent.h>
+#include <string>
+#include <sys/stat.h>
+
 #include "common/algorithm/dstore_tuplesort.h"
 #include "common/algorithm/dstore_logtape.h"
 #include "common/algorithm/dstore_sorttemplate.h"

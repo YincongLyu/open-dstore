@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <atomic>
 #include <map>
+#include <string>
 #include "securec.h"
 
 #include "framework/dstore_instance_interface.h"
@@ -136,18 +137,16 @@ struct StorageTableContext {
 
     StorageRelation GetHeapRelationEntry(const char *tableName)
     {
-        if (heapTable.count(tableName) != 0) {
-            return heapTable[tableName];
-        }
-        return nullptr;
+        std::string key(tableName);
+        auto it = heapTable.find(key);
+        return (it != heapTable.end()) ? it->second : nullptr;
     }
 
     StorageRelation GetIndexRelationEntry(const char *indexName)
     {
-        if (indexTable.count(indexName) != 0) {
-            return indexTable[indexName];
-        }
-        return nullptr;
+        std::string key(indexName);
+        auto it = indexTable.find(key);
+        return (it != indexTable.end()) ? it->second : nullptr;
     }
 
     void InsertHeapTable(const char *tableName, StorageRelation relation);
