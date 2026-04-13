@@ -62,7 +62,20 @@ public:
 
     static inline LockRequestLinker *GetLinkerFromLevelNode(dlist_node *node, int32 level)
     {
-        return dlist_container(LockRequestLinker, defaultNodesSpace[level], node);
+        // return dlist_container(LockRequestLinker, defaultNodesSpace[level], node);
+        // 安全检查
+        if (node == nullptr || level < 0 || level >= MAX_SKIPLIST_LEVEL) {
+            return nullptr;
+        }
+        
+        // 计算 defaultNodesSpace[level] 相对于结构体起始的偏移
+        // offsetof(LockRequestLinker, defaultNodesSpace) 是数组起始偏移
+        // level * sizeof(dlist_node) 是数组内的偏移
+        size_t offset = offsetof(LockRequestLinker, defaultNodesSpace) + 
+                        level * sizeof(dlist_node);
+        
+        // 从节点指针反推出结构体指针
+        return (LockRequestLinker*)((char*)node - offset);
     }
 
     inline dlist_node *GetDlistNode()

@@ -23,6 +23,9 @@
  *
  * ---------------------------------------------------------------------------------------
  */
+#include <clocale>
+#include <cstring>
+
 #include "common/datatype/dstore_varlena_utils.h"
 #include "common/log/dstore_log.h"
 #include "common/memory/dstore_mctx.h"
