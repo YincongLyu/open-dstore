@@ -33,3 +33,10 @@ Valid modules: Transaction State Manager, Centralized Lock Manager, Distributed 
 
 ## Reference Notes
 - Historical `.claude/` material lives in the same docs directory; there is no separate `.claude` support in OpenCode, so keep modifying the `docs/` files and `AGENTS.md` if the guidance changes.
+
+## Active Technologies
+- C++17 + dstore framework thread/runtime utilities, STL atomics/mutex/thread primitives, existing dstore logging macros and configuration framework (002-watchdog-heartbeat)
+- In-memory watchdog metadata only; no persisted storage in the first release (002-watchdog-heartbeat)
+
+## Recent Changes
+- 002-watchdog-heartbeat: Added C++17 + dstore framework thread/runtime utilities, STL atomics/mutex/thread primitives, existing dstore logging macros and configuration framework
