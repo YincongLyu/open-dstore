@@ -34,6 +34,7 @@
 #include "buffer/dstore_buf_mgr.h"
 #include "buffer/dstore_checkpointer.h"
 #include "framework/dstore_instance.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "common/instrument/dstore_stat.h"
 #include "buffer/dstore_bg_disk_page_writer.h"
 
@@ -92,6 +93,11 @@ RetStatus BgDiskPageMasterWriter::Init()
 void BgDiskPageMasterWriter::Run()
 {
     AutoMemCxtSwitch autoSwitch{m_memContext};
+    WatchDogMgr *watchDogMgr = GetWatchDogMgr();
+    WatchDogEntryId watchDogEntryId;
+    bool watchDogRegistered = watchDogMgr != nullptr && STORAGE_FUNC_SUCC(watchDogMgr->Register(
+        WatchDogThreadCategory::BUFFER_DIRTY_PAGE_FLUSH, m_pdbId, "DiskMstrWriter", WATCHDOG_DEFAULT_TIMEOUT_MS,
+        watchDogEntryId));
 
     /* Decide if start a dirty page flush */
     RefreshNextFlushTime();
@@ -107,6 +113,9 @@ void BgDiskPageMasterWriter::Run()
     StorageReleasePanic(pdb == nullptr, MODULE_BGPAGEWRITER, ErrMsg("pdb %u is nullptr", m_pdbId));
 
     for (;;) {
+        if (watchDogRegistered) {
+            watchDogMgr->FeedTask(watchDogEntryId);
+        }
         /* exit if get the request */
         if (IsStop()) {
             Destroy();
@@ -172,6 +181,9 @@ void BgDiskPageMasterWriter::Run()
         /* sleep for next turn flush */
         SmartSleep();
         RefreshNextFlushTime();
+    }
+    if (watchDogRegistered) {
+        watchDogMgr->Unregister(watchDogEntryId);
     }
     ErrLog(DSTORE_LOG, MODULE_BGPAGEWRITER, ErrMsg("BgDiskPageMasterWriter pdbId %u, %lu exited MainLoop", m_pdbId,
         thrd->GetCore()->pid));

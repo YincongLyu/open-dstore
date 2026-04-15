@@ -20,6 +20,7 @@
 #include "port/dstore_port.h"
 #include "lock/dstore_lwlock.h"
 #include "framework/dstore_thread.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "buffer/dstore_buf_mgr.h"
 #include "buffer/dstore_bg_page_writer_mgr.h"
 #include "buffer/dstore_bg_disk_page_writer.h"
@@ -29,9 +30,17 @@ namespace DSTORE {
 void CheckpointMgr::CheckpointerMain()
 {
     AutoMemCxtSwitch autoSwitch{m_checkpointContext};
+    WatchDogMgr *watchDogMgr = GetWatchDogMgr();
+    WatchDogEntryId watchDogEntryId;
+    bool watchDogRegistered = watchDogMgr != nullptr && STORAGE_FUNC_SUCC(watchDogMgr->Register(
+        WatchDogThreadCategory::CHECKPOINT_PROGRESS, m_pdbId, "Checkpoint", WATCHDOG_DEFAULT_TIMEOUT_MS,
+        watchDogEntryId));
 
     while (true) {
 LOOP:
+        if (watchDogRegistered) {
+            watchDogMgr->FeedTask(watchDogEntryId);
+        }
         Timestamp now;
         Timestamp elapsedTime;
 
@@ -114,6 +123,10 @@ LOOP:
         for (int i = 0; i < waitTimeInMs && !m_shutdownRequested; i++) {
             GaussUsleep(STORAGE_USECS_PER_MSEC);
         }
+    }
+
+    if (watchDogRegistered) {
+        watchDogMgr->Unregister(watchDogEntryId);
     }
 }
 
