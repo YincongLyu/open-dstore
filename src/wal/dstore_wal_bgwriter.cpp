@@ -25,6 +25,7 @@
  *
  */
 #include "common/log/dstore_log.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "framework/dstore_thread_autobinder_interface.h"
 #include "wal/dstore_wal_logstream.h"
 #include "wal/dstore_wal_utils.h"
@@ -158,9 +159,17 @@ void BgWalWriter::Stop() noexcept
 
 void BgWalWriter::BgFlushMain()
 {
+    WatchDogMgr *watchDogMgr = GetWatchDogMgr();
+    WatchDogEntryId watchDogEntryId;
+    bool watchDogRegistered = watchDogMgr != nullptr && STORAGE_FUNC_SUCC(watchDogMgr->Register(
+        WatchDogThreadCategory::WAL_FLUSH, m_pdbId, "BgWalWriter", WATCHDOG_DEFAULT_TIMEOUT_MS, watchDogEntryId));
+
     ErrLog(DSTORE_LOG, MODULE_WAL, ErrMsg("[PDB:%u, WAL:%lu]BgWalWriter start", m_pdbId, m_stream->GetWalId()));
     /* Step 1: keep doing main work if not needStop */
     while (likely(!m_needStop.load(std::memory_order_relaxed))) {
+        if (watchDogRegistered) {
+            watchDogMgr->FeedTask(watchDogEntryId);
+        }
         /* record the start time */
         double initStart = static_cast<double>(GetSystemTimeInMicrosecond());
         uint64 flushedDataLen = m_stream->Flush();
@@ -174,6 +183,9 @@ void BgWalWriter::BgFlushMain()
                 static_cast<double>(flushedDataLen) / spendTimeInMs));
         }
         SleepIfNecessary(flushedDataLen);
+    }
+    if (watchDogRegistered) {
+        watchDogMgr->Unregister(watchDogEntryId);
     }
     /* Step 2: wait async flush finish */
     uint64 maxWrittenToFilePlsn = m_stream->GetMaxWrittenToFilePlsn();

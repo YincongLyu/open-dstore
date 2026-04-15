@@ -26,6 +26,7 @@
  */
 #include <future>
 #include "port/dstore_port.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "common/log/dstore_log.h"
 #include "common/instrument/perf/dstore_perf.h"
 #include "buffer/dstore_checkpointer.h"
@@ -540,6 +541,11 @@ void WalFileManager::RecycleWalFileWorkerMain(bool isDropping)
             ErrMsg("[RecycleWalFileWorkerMain] Pdb object is null, pdbId: %u.", m_initWalFilesPara.pdbId));
         return;
     }
+    WatchDogMgr *watchDogMgr = GetWatchDogMgr();
+    WatchDogEntryId watchDogEntryId;
+    bool watchDogRegistered = watchDogMgr != nullptr && STORAGE_FUNC_SUCC(watchDogMgr->Register(
+        WatchDogThreadCategory::WAL_FILE_RECYCLE, m_initWalFilesPara.pdbId, "RecWalWorker",
+        WATCHDOG_DEFAULT_TIMEOUT_MS, watchDogEntryId));
     uint64 standbyWaitCount = 0;
     /* standby pdb's walFile is created by primary, wait files ready before proceeding */
     while (pdb->GetPdbRoleMode() == PdbRoleMode::PDB_STANDBY && (m_headFile == nullptr || m_tailFile == nullptr) &&
@@ -555,6 +561,9 @@ void WalFileManager::RecycleWalFileWorkerMain(bool isDropping)
 
     constexpr long sleepTimeInMs = 10;
     while (!m_stopBgRecycleThread.load(std::memory_order_relaxed)) {
+        if (watchDogRegistered) {
+            watchDogMgr->FeedTask(watchDogEntryId);
+        }
         PauseRecycleIfNeed();
 
         if (isDropping) {
@@ -568,6 +577,9 @@ void WalFileManager::RecycleWalFileWorkerMain(bool isDropping)
 
         /* Step 1: wait m_headFile recyclable */
         while (!WalFileRecyclable(m_headFile)) {
+            if (watchDogRegistered) {
+                watchDogMgr->FeedTask(watchDogEntryId);
+            }
             /* Step 1.1: N = maxFreeWalFileCount - curFreeWalFileCount if N > 0, create N wal files and append */
             if (pdb->GetPdbRoleMode() != PdbRoleMode::PDB_STANDBY &&
                 m_initWalFilesPara.maxFreeWalFileCount > GetFreeWalFileCount() &&
@@ -593,6 +605,9 @@ void WalFileManager::RecycleWalFileWorkerMain(bool isDropping)
     }
 
 RECYCLE_WAL_END:
+    if (watchDogRegistered) {
+        watchDogMgr->Unregister(watchDogEntryId);
+    }
     g_storageInstance->UnregisterThread();
 }
 
