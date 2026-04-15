@@ -28,6 +28,7 @@
 #include <csignal>
 
 #include "types/data_types.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "undo/dstore_rollback_trx_worker.h"
 #include "undo/dstore_rollback_trx_task_mgr.h"
 
@@ -212,7 +213,8 @@ void RollbackTrxTaskMgr::DispatchMain(PdbId pdbId)
 
     (void)pthread_setname_np(pthread_self(), "RollbackTrxMgr");
 
-    DoDispatch();
+    WatchDogEntryId watchDogEntryId;
+    DoDispatch(&watchDogEntryId, true);
 
     if (thrd != nullptr) {
         g_storageInstance->RemoveVisibleThread(thrd);
@@ -223,8 +225,10 @@ void RollbackTrxTaskMgr::DispatchMain(PdbId pdbId)
     m_isDispatching.store(false, std::memory_order_release);
 }
 
-void RollbackTrxTaskMgr::DoDispatch()
+void RollbackTrxTaskMgr::DoDispatch(WatchDogEntryId *entryId, bool feedWatchdog)
 {
+    WatchDogMgr *watchDogMgr = feedWatchdog ? GetWatchDogMgr() : nullptr;
+    bool watchDogRegistered = false;
 Dispatch:
     if (m_needStop.load(std::memory_order_acquire) && IsAllTaskFinished()) {
         return;
@@ -240,7 +244,16 @@ Dispatch:
         goto DispatchSleep;
     }
     idleWorker->SetTask(rollbackTask);
+    watchDogRegistered = feedWatchdog && entryId != nullptr && watchDogMgr != nullptr &&
+        STORAGE_FUNC_SUCC(watchDogMgr->Register(WatchDogThreadCategory::UNDO_RECYCLE_DISPATCH, m_pdbId,
+            "RollbackTrxMgr", WATCHDOG_DEFAULT_TIMEOUT_MS, *entryId));
+    if (watchDogRegistered) {
+        watchDogMgr->FeedTask(*entryId);
+    }
     idleWorker->Run();
+    if (watchDogRegistered) {
+        watchDogMgr->Unregister(*entryId);
+    }
     m_currSleepSeconds = m_defaultSleepSeconds;
 
 DispatchSleep:

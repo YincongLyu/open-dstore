@@ -35,6 +35,7 @@
 #include "common/memory/dstore_mctx.h"
 #include "transaction/dstore_transaction_types.h"
 #include "framework/dstore_instance.h"
+#include "framework/dstore_watchdog_entry.h"
 #include "undo/dstore_undo_zone.h"
 
 namespace DSTORE {
@@ -119,7 +120,7 @@ private:
     PdbId m_pdbId;
 
     void DispatchMain(PdbId pdbId);
-    void DoDispatch();
+    void DoDispatch(WatchDogEntryId *entryId = nullptr, bool feedWatchdog = false);
     RollbackTrxWorker *GetNextIdleWorker();
     RollbackTrxTask *GetNextRollbackTrxTask();
     bool IsAllWorkerIdle() const;

@@ -28,6 +28,7 @@
 #include "transaction/dstore_csn_mgr.h"
 #include "transaction/dstore_transaction.h"
 #include "wal/dstore_wal_write_context.h"
+#include "framework/dstore_watchdog_mgr.h"
 #include "index/dstore_btree_perf_unit.h"
 #include "index/dstore_btree_recycle_partition.h"
 #include "index/dstore_btree_page_recycle.h"
@@ -495,7 +496,18 @@ void BtreeRecycleWorker::BtreeRecycleThreadMain()
         thrd->Sleep();
         ObjSpaceMgrTask* task = m_btrRecycleTask.load(std::memory_order_acquire);
         if (task) {
+            WatchDogMgr *watchDogMgr = GetWatchDogMgr();
+            WatchDogEntryId watchDogEntryId;
+            bool watchDogRegistered = watchDogMgr != nullptr && STORAGE_FUNC_SUCC(watchDogMgr->Register(
+                WatchDogThreadCategory::BTREE_RECYCLE_PRUNE, m_pdbId, "IndexRecyle", WATCHDOG_DEFAULT_TIMEOUT_MS,
+                watchDogEntryId));
+            if (watchDogRegistered) {
+                watchDogMgr->FeedTask(watchDogEntryId);
+            }
             m_btreeRecycleResult = task->ExecuteRecycleBtreeTask();
+            if (watchDogRegistered) {
+                watchDogMgr->Unregister(watchDogEntryId);
+            }
             m_btrRecycleTask.store(nullptr, std::memory_order_release);
         }
     }
