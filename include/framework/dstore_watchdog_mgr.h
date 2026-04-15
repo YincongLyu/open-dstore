@@ -50,8 +50,10 @@ public:
     void Stop();
     void Shutdown();
 
-    RetStatus Register(WatchDogEntry *entry);
-    void Unregister(WatchDogEntry *entry);
+    RetStatus Register(WatchDogThreadCategory category, PdbId scopeId, const char *threadName, uint32 timeoutMs,
+        WatchDogEntryId &entryId);
+    void Unregister(const WatchDogEntryId &entryId);
+    void FeedTask(const WatchDogEntryId &entryId);
 
     void FeedSelfHealth();
     void CheckSelfHealth();

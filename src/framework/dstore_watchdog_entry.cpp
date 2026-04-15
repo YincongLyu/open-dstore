@@ -151,7 +151,7 @@ WatchDogStatus WatchDogEntry::EvaluateHealth(TimestampTz currentTime)
     m_consecutiveMissCount++;
 
     if (m_consecutiveMissCount < WATCHDOG_MISS_THRESHOLD) {
-        m_status = WatchDogStatus::WARNING;
+        m_status = WatchDogStatus::WARN;
         return m_status;
     }
 

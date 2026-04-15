@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include "common/dstore_common_utils.h"
 #include "common/dstore_datatype.h"
 #include "common/memory/dstore_mctx.h"
 
@@ -27,7 +28,7 @@ namespace DSTORE {
 
 enum class WatchDogStatus : uint8 {
     HEALTHY,
-    WARNING,
+    WARN,
     UNHEALTHY,
     UNREGISTERED
 };

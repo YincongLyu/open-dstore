@@ -16,9 +16,11 @@
  */
 
 #include "framework/dstore_watchdog_mgr.h"
+#include "framework/dstore_instance.h"
 #include "common/log/dstore_log.h"
 #include "common/memory/dstore_mctx.h"
 #include "securec.h"
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 
@@ -60,17 +62,7 @@ RetStatus WatchDogMgr::Init()
         return DSTORE_SUCC;
     }
 
-    m_memoryContext = DstoreAllocSetContextCreate(
-        g_storageInstance->GetMemoryMgr()->GetRoot(),
-        "WatchDogMgr",
-        ALLOCSET_DEFAULT_SIZES);
-
-    if (STORAGE_VAR_NULL(m_memoryContext)) {
-        ErrLog(DSTORE_ERROR, MODULE_FRAMEWORK, ErrMsg("Failed to create memory context for WatchDogMgr."));
-        return DSTORE_FAIL;
-    }
-
-    LWLockInitialize(&m_registryLock, LWLOCK_GROUP_FRAMEWORK);
+    LWLockInitialize(&m_registryLock);
 
     m_initialized = true;
     return DSTORE_SUCC;
@@ -87,10 +79,7 @@ void WatchDogMgr::Destroy()
     {
         std::lock_guard<std::mutex> lock(m_registryMutex);
         for (auto entry : m_entries) {
-            if (entry != nullptr) {
-                entry->Destroy();
-                DstorePfreeExt(entry);
-            }
+            ReleaseEntry(entry);
         }
         m_entries.clear();
         m_entryCount = 0;
@@ -154,21 +143,28 @@ void WatchDogMgr::Shutdown()
     Destroy();
 }
 
-RetStatus WatchDogMgr::Register(WatchDogEntry *entry)
+RetStatus WatchDogMgr::Register(WatchDogThreadCategory category, PdbId scopeId, const char *threadName,
+    uint32 timeoutMs, WatchDogEntryId &entryId)
 {
-    if (entry == nullptr) {
-        return DSTORE_FAIL;
-    }
-
     std::lock_guard<std::mutex> lock(m_registryMutex);
 
     if (m_entryCount >= WATCHDOG_MAX_ENTRIES) {
         ErrLog(DSTORE_WARNING, MODULE_FRAMEWORK, 
-               ErrMsg("Watchdog registry full, cannot register entry %s.", entry->GetThreadName()));
+               ErrMsg("Watchdog registry full, cannot register entry %s.", threadName == nullptr ? "" : threadName));
         return DSTORE_FAIL;
     }
 
-    entry->Reset();
+    WatchDogEntry *entry = nullptr;
+    if (STORAGE_FUNC_FAIL(AllocateEntry(entry))) {
+        return DSTORE_FAIL;
+    }
+
+    entryId = WatchDogEntryId(m_nextEntryId++, category, scopeId);
+    if (STORAGE_FUNC_FAIL(entry->Init(entryId, threadName, timeoutMs))) {
+        ReleaseEntry(entry);
+        return DSTORE_FAIL;
+    }
+
     m_entries.push_back(entry);
     m_entryCount++;
 
@@ -177,22 +173,36 @@ RetStatus WatchDogMgr::Register(WatchDogEntry *entry)
     return DSTORE_SUCC;
 }
 
-void WatchDogMgr::Unregister(WatchDogEntry *entry)
+void WatchDogMgr::Unregister(const WatchDogEntryId &entryId)
 {
-    if (entry == nullptr) {
-        return;
-    }
-
     std::lock_guard<std::mutex> lock(m_registryMutex);
 
-    auto it = std::find(m_entries.begin(), m_entries.end(), entry);
-    if (it != m_entries.end()) {
+    auto it = std::find_if(m_entries.begin(), m_entries.end(),
+        [&entryId](WatchDogEntry *entry) { return entry != nullptr && entry->GetEntryId() == entryId; });
+    if (it != m_entries.end() && *it != nullptr) {
+        WatchDogEntry *entry = *it;
+        char threadName[WATCHDOG_THREAD_NAME_MAX_LEN] = {'\0'};
+        errno_t rc = strncpy_s(threadName, WATCHDOG_THREAD_NAME_MAX_LEN, entry->GetThreadName(),
+            strlen(entry->GetThreadName()));
+        storage_securec_check(rc, "\0", "\0");
         entry->MarkUnregistered();
         m_entries.erase(it);
         m_entryCount--;
+        ReleaseEntry(entry);
 
         ErrLog(DSTORE_DEBUG1, MODULE_FRAMEWORK, 
-               ErrMsg("Watchdog entry unregistered: %s.", entry->GetThreadName()));
+               ErrMsg("Watchdog entry unregistered: %s.", threadName));
+    }
+}
+
+void WatchDogMgr::FeedTask(const WatchDogEntryId &entryId)
+{
+    std::lock_guard<std::mutex> lock(m_registryMutex);
+
+    auto it = std::find_if(m_entries.begin(), m_entries.end(),
+        [&entryId](WatchDogEntry *entry) { return entry != nullptr && entry->GetEntryId() == entryId; });
+    if (it != m_entries.end() && *it != nullptr) {
+        (*it)->Feed();
     }
 }
 
@@ -206,7 +216,7 @@ void WatchDogMgr::CheckSelfHealth()
     TimestampTz currentTime = GetCurrentTimestamp();
     TimestampTz lastHealthTime = m_selfHealthTimestamp;
     
-    uint64_t durationMs = (currentTime - lastHealthTime) * 1000;
+    TimestampTz durationMs = (currentTime - lastHealthTime) * 1000;
     
     if (durationMs > m_selfHealthTimeoutMs) {
         EmitSelfHealthWarning(durationMs);
@@ -297,7 +307,7 @@ RetStatus WatchDogMgr::GetDiagnoseSnapshot(WatchDogDiagnoseIterator &iterator)
     selfSnapshot.isSelfHealth = true;
     
     TimestampTz currentTime = GetCurrentTimestamp();
-    uint64_t selfDuration = (currentTime - m_selfHealthTimestamp) * 1000;
+    TimestampTz selfDuration = (currentTime - m_selfHealthTimestamp) * 1000;
     if (selfDuration > m_selfHealthTimeoutMs) {
         selfSnapshot.healthState = WatchDogStatus::UNHEALTHY;
         selfSnapshot.unhealthyDurationMs = selfDuration;
@@ -419,15 +429,13 @@ void WatchDogMgr::EmitWarning(const WarningEvent &event)
 void WatchDogMgr::EmitSelfHealthWarning(TimestampTz overdueDuration)
 {
     ErrLog(DSTORE_WARNING, MODULE_FRAMEWORK,
-           ErrMsg("Watchdog self-health warning: overdue=%lu ms, threshold=%u ms",
+           ErrMsg("Watchdog self-health warning: overdue=%lu ms, threshold=%lu ms",
                   overdueDuration, m_selfHealthTimeoutMs));
 }
 
 RetStatus WatchDogMgr::AllocateEntry(WatchDogEntry *&entry)
 {
-    AutoMemCxtSwitch autoSwitch(m_memoryContext);
-
-    entry = (WatchDogEntry *)DstorePalloc(sizeof(WatchDogEntry));
+    entry = new (std::nothrow) WatchDogEntry();
     if (STORAGE_VAR_NULL(entry)) {
         ErrLog(DSTORE_ERROR, MODULE_FRAMEWORK, ErrMsg("Failed to allocate WatchDogEntry."));
         return DSTORE_FAIL;
@@ -440,7 +448,7 @@ void WatchDogMgr::ReleaseEntry(WatchDogEntry *entry)
 {
     if (entry != nullptr) {
         entry->Destroy();
-        DstorePfreeExt(entry);
+        delete entry;
     }
 }
 
