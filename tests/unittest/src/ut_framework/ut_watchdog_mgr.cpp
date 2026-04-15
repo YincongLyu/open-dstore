@@ -54,14 +54,12 @@ TEST_F(WatchDogMgrTest, RegisterUnregister_level0)
     WatchDogMgr mgr;
     EXPECT_EQ(mgr.Init(), DSTORE_SUCC);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(1, WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "TestThread", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr.Register(&entry), DSTORE_SUCC);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr.Register(WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId, "TestThread", 30000, entryId),
+        DSTORE_SUCC);
     EXPECT_EQ(mgr.GetActiveEntryCount(), 1);
 
-    mgr.Unregister(&entry);
+    mgr.Unregister(entryId);
     EXPECT_EQ(mgr.GetActiveEntryCount(), 0);
 
     mgr.Destroy();
@@ -72,10 +70,9 @@ TEST_F(WatchDogMgrTest, GetDiagnoseSnapshot_level0)
     WatchDogMgr mgr;
     EXPECT_EQ(mgr.Init(), DSTORE_SUCC);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(1, WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "TestThread", 30000), DSTORE_SUCC);
-    EXPECT_EQ(mgr.Register(&entry), DSTORE_SUCC);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr.Register(WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId, "TestThread", 30000, entryId),
+        DSTORE_SUCC);
 
     WatchDogDiagnoseIterator iterator;
     EXPECT_EQ(iterator.Init(64), DSTORE_SUCC);
@@ -83,7 +80,7 @@ TEST_F(WatchDogMgrTest, GetDiagnoseSnapshot_level0)
     EXPECT_GE(iterator.GetRecordCount(), 1);
 
     iterator.Destroy();
-    mgr.Unregister(&entry);
+    mgr.Unregister(entryId);
     mgr.Destroy();
 }
 

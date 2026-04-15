@@ -25,59 +25,46 @@ using namespace DSTORE;
 void BufferWatchdogTest::SetUp()
 {
     DSTORETEST::SetUp();
+    ASSERT_EQ(InitWatchDogMgr(), DSTORE_SUCC);
 }
 
 void BufferWatchdogTest::TearDown()
 {
+    DestroyWatchDogMgr();
     DSTORETEST::TearDown();
 }
 
 TEST_F(BufferWatchdogTest, CheckpointWatchdog_level0)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
-
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(3, WatchDogThreadCategory::CHECKPOINT_PROGRESS, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "CHECKPOINT", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    entry.Feed();
-    mgr->Unregister(&entry);
+    ASSERT_NE(mgr, nullptr);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::CHECKPOINT_PROGRESS, g_defaultPdbId, "CHECKPOINT", 30000,
+        entryId), DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(BufferWatchdogTest, DirtyPageFlushWatchdog_level0)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
-
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(4, WatchDogThreadCategory::BUFFER_DIRTY_PAGE_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "DIRTY_PAGE_FLUSH", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    entry.Feed();
-    mgr->Unregister(&entry);
+    ASSERT_NE(mgr, nullptr);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::BUFFER_DIRTY_PAGE_FLUSH, g_defaultPdbId,
+        "DIRTY_PAGE_FLUSH", 30000, entryId), DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(BufferWatchdogTest, CheckpointLifecycle_level1)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
-
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(3, WatchDogThreadCategory::CHECKPOINT_PROGRESS, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "CHECKPOINT", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
+    ASSERT_NE(mgr, nullptr);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::CHECKPOINT_PROGRESS, g_defaultPdbId, "CHECKPOINT", 30000,
+        entryId), DSTORE_SUCC);
     for (int i = 0; i < 5; i++) {
-        entry.Feed();
+        mgr->FeedTask(entryId);
     }
-    mgr->Unregister(&entry);
+    mgr->Unregister(entryId);
 }

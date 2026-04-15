@@ -25,43 +25,35 @@ using namespace DSTORE;
 void BtreeWatchdogTest::SetUp()
 {
     DSTORETEST::SetUp();
+    ASSERT_EQ(InitWatchDogMgr(), DSTORE_SUCC);
 }
 
 void BtreeWatchdogTest::TearDown()
 {
+    DestroyWatchDogMgr();
     DSTORETEST::TearDown();
 }
 
 TEST_F(BtreeWatchdogTest, BtreeRecyclePruneWatchdog_level0)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
-
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(6, WatchDogThreadCategory::BTREE_RECYCLE_PRUNE, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "BTREE_RECYCLE", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    entry.Feed();
-    mgr->Unregister(&entry);
+    ASSERT_NE(mgr, nullptr);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::BTREE_RECYCLE_PRUNE, g_defaultPdbId, "BTREE_RECYCLE", 30000,
+        entryId), DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(BtreeWatchdogTest, BtreeLifecycle_level1)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
-
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(6, WatchDogThreadCategory::BTREE_RECYCLE_PRUNE, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "BTREE_RECYCLE", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
+    ASSERT_NE(mgr, nullptr);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::BTREE_RECYCLE_PRUNE, g_defaultPdbId, "BTREE_RECYCLE", 30000,
+        entryId), DSTORE_SUCC);
     for (int i = 0; i < 10; i++) {
-        entry.Feed();
+        mgr->FeedTask(entryId);
     }
-    mgr->Unregister(&entry);
+    mgr->Unregister(entryId);
 }

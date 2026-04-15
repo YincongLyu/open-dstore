@@ -16,7 +16,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "ut_wal/ut_wal_watchdog.h"
+#include "ut_ha/ut_wal_watchdog.h"
 #include "framework/dstore_watchdog_mgr.h"
 #include "framework/dstore_instance.h"
 #include "wal/dstore_wal_bgwriter.h"
@@ -26,74 +26,62 @@ using namespace DSTORE;
 void WalWatchdogTest::SetUp()
 {
     DSTORETEST::SetUp();
+    ASSERT_EQ(InitWatchDogMgr(), DSTORE_SUCC);
 }
 
 void WalWatchdogTest::TearDown()
 {
+    DestroyWatchDogMgr();
     DSTORETEST::TearDown();
 }
 
 TEST_F(WalWatchdogTest, RegisterWatchdogEntry_level0)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
+    ASSERT_NE(mgr, nullptr);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(1, WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "WAL_FLUSH", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    mgr->Unregister(&entry);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId, "WAL_FLUSH", 30000, entryId),
+        DSTORE_SUCC);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(WalWatchdogTest, FeedHeartbeat_level0)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
+    ASSERT_NE(mgr, nullptr);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(1, WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "WAL_FLUSH", 30000), DSTORE_SUCC);
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId, "WAL_FLUSH", 30000, entryId),
+        DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    WatchDogEntry *entry = mgr->FindEntry(entryId);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_EQ(entry->GetStatus(), WatchDogStatus::HEALTHY);
 
-    entry.Feed();
-    EXPECT_EQ(entry.GetStatus(), WatchDogStatus::HEALTHY);
-
-    mgr->Unregister(&entry);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(WalWatchdogTest, WalFlushLifecycle_level1)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
+    ASSERT_NE(mgr, nullptr);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(1, WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "WAL_FLUSH", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    entry.Feed();
-    mgr->Unregister(&entry);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::WAL_FLUSH, g_defaultPdbId, "WAL_FLUSH", 30000, entryId),
+        DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    mgr->Unregister(entryId);
 }
 
 TEST_F(WalWatchdogTest, WalRecycleLifecycle_level1)
 {
     WatchDogMgr *mgr = GetWatchDogMgr();
-    if (mgr == nullptr) {
-        return;
-    }
+    ASSERT_NE(mgr, nullptr);
 
-    WatchDogEntry entry;
-    WatchDogEntryId entryId(2, WatchDogThreadCategory::WAL_FILE_RECYCLE, g_defaultPdbId);
-    EXPECT_EQ(entry.Init(entryId, "WAL_FILE_RECYCLE", 30000), DSTORE_SUCC);
-
-    EXPECT_EQ(mgr->Register(&entry), DSTORE_SUCC);
-    entry.Feed();
-    mgr->Unregister(&entry);
+    WatchDogEntryId entryId;
+    EXPECT_EQ(mgr->Register(WatchDogThreadCategory::WAL_FILE_RECYCLE, g_defaultPdbId, "WAL_FILE_RECYCLE", 30000,
+        entryId), DSTORE_SUCC);
+    mgr->FeedTask(entryId);
+    mgr->Unregister(entryId);
 }
