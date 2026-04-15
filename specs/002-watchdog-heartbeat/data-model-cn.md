@@ -17,7 +17,7 @@
 **约束**：
 - 第一版不能监控超过 6 类线程；
 - 自监控与普通线程监控必须分离；
-- 即使当前没有活跃 entry，也必须能返回空诊断结果而不是报错。
+- 即使当前没有活跃 peer entry，也必须返回 watchdog 自健康记录而不是报错。
 
 ### 2. WatchDogEntry
 
@@ -32,7 +32,7 @@
 | `timeoutThreshold` | 当前线程独立的超时阈值 |
 | `lastHeartbeatTime` | 最近一次心跳上报时间 |
 | `consecutiveMissCount` | 连续 miss 次数 |
-| `healthState` | healthy / warning / unhealthy |
+| `healthState` | healthy / warn / unhealthy |
 | `registered` | 当前是否仍在 registry 中 |
 
 **约束**：
@@ -110,7 +110,7 @@ registered/grace
 healthy
    │ threshold exceeded
    ▼
-warning
+warn
    │ miss count 达到阈值
    ▼
 unhealthy

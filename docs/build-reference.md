@@ -33,7 +33,7 @@ source buildenv    # Load environment (BUILD_ROOT, LOCAL_LIB_PATH, GCC paths, LD
 ```bash
 source buildenv
 cd utils && bash build.sh -m debug && cd ..
-bash build.sh -m debug -st on -tm ut
+bash build.sh -m debug -st on -tm ut # 附带 ut 的编译方式
 cd tmp_build && make run_dstore_ut_all
 ```
 

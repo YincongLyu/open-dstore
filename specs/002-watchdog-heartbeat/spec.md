@@ -131,8 +131,8 @@ the system emits an alert while remaining available for further diagnosis.
 - **FR-014**: When a previously overdue task resumes liveness reporting, the
   system MUST restore that task to a healthy state and clear its consecutive-miss
   state.
-- **FR-015**: If no tasks are currently registered, the diagnostic view MUST
-  return an empty result set.
+- **FR-015**: If no peer tasks are currently registered, the diagnostic view MUST
+  still return watchdog self-health without treating the empty peer registry as an error.
 - **FR-016**: The monitoring facility MUST expose its own delayed-health signal
   separately from monitored task warnings.
 - **FR-017**: Watchdog self-health MUST be evaluated through a dedicated

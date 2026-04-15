@@ -261,7 +261,8 @@ NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 **流程**:
 ```bash
 # 1. 运行测试命令
-npm test / cargo test / pytest / make run_dstore_ut_all
+bash build.sh -m debug -st on -tm ut
+make run_dstore_ut_all
 
 # 2. 检查输出
 # 3. 确认 0 failures

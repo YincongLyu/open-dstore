@@ -22,7 +22,7 @@
 
 - Must not monitor more than the six approved thread categories in first release
 - Must keep self-health separate from ordinary peer-task heartbeat semantics
-- Must support empty registry state without error
+- Must support an empty peer-entry registry without error while still exposing watchdog self-health
 
 ## Entity: WatchDogEntry
 
@@ -37,7 +37,7 @@
 - `timeoutThreshold`: per-entry timeout threshold
 - `lastHeartbeatTime`: latest peer-reported progress time
 - `consecutiveMissCount`: current miss streak
-- `healthState`: healthy / warning / unhealthy
+- `healthState`: healthy / warn / unhealthy
 - `registered`: whether entry is active in the registry
 
 ### Relationships
@@ -101,12 +101,12 @@
 
 ### WatchDogEntry
 
-`unregistered -> registered/grace -> healthy -> warning -> unhealthy`
+`unregistered -> registered/grace -> healthy -> warn -> unhealthy`
 
 - `registered/grace -> healthy`: heartbeat received within threshold
-- `healthy -> warning`: threshold exceeded but miss streak below unhealthy threshold
-- `warning -> unhealthy`: consecutive-miss threshold reached
-- `warning/unhealthy -> healthy`: heartbeat resumes and miss streak resets
+- `healthy -> warn`: threshold exceeded but miss streak below unhealthy threshold
+- `warn -> unhealthy`: consecutive-miss threshold reached
+- `warn/unhealthy -> healthy`: heartbeat resumes and miss streak resets
 - `registered/* -> unregistered`: worker stops and unregisters cleanly
 
 ### WatchDogMgr self-health

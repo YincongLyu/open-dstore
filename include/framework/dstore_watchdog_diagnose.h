@@ -91,19 +91,90 @@ struct WarningEvent {
 
 class WatchDogDiagnoseIterator {
 public:
-    WatchDogDiagnoseIterator();
+    WatchDogDiagnoseIterator()
+        : m_records(nullptr),
+          m_maxRecords(0),
+          m_currentIdx(0),
+          m_recordCount(0),
+          m_memoryContext(nullptr)
+    {
+    }
     ~WatchDogDiagnoseIterator() = default;
     DISALLOW_COPY_AND_MOVE(WatchDogDiagnoseIterator);
 
-    RetStatus Init(size_t maxRecords);
-    void Destroy();
+    RetStatus Init(size_t maxRecords)
+    {
+        if (maxRecords == 0) {
+            return DSTORE_FAIL;
+        }
 
-    bool HasNext() const;
-    HealthSnapshot *GetNext();
-    HealthSnapshot *GetCurrent();
+        Destroy();
+        m_memoryContext = DstoreAllocSetContextCreate(g_dstoreCurrentMemoryContext,
+            "WatchDogDiagnoseIterator", ALLOCSET_SMALL_SIZES);
+        if (STORAGE_VAR_NULL(m_memoryContext)) {
+            return DSTORE_FAIL;
+        }
 
-    size_t GetRecordCount() const;
-    RetStatus AddRecord(const HealthSnapshot &snapshot);
+        m_records = static_cast<HealthSnapshot *>(
+            DstoreMemoryContextAllocZero(m_memoryContext, maxRecords * sizeof(HealthSnapshot)));
+        if (m_records == nullptr) {
+            DstoreMemoryContextDelete(m_memoryContext);
+            m_memoryContext = nullptr;
+            return DSTORE_FAIL;
+        }
+
+        m_maxRecords = maxRecords;
+        m_currentIdx = 0;
+        m_recordCount = 0;
+        return DSTORE_SUCC;
+    }
+
+    void Destroy()
+    {
+        DstorePfreeExt(m_records);
+        if (m_memoryContext != nullptr) {
+            DstoreMemoryContextDelete(m_memoryContext);
+            m_memoryContext = nullptr;
+        }
+        m_maxRecords = 0;
+        m_currentIdx = 0;
+        m_recordCount = 0;
+    }
+
+    bool HasNext() const
+    {
+        return m_currentIdx < m_recordCount;
+    }
+
+    HealthSnapshot *GetNext()
+    {
+        if (!HasNext()) {
+            return nullptr;
+        }
+        return &m_records[m_currentIdx++];
+    }
+
+    HealthSnapshot *GetCurrent()
+    {
+        if (m_currentIdx == 0 || m_currentIdx > m_recordCount) {
+            return nullptr;
+        }
+        return &m_records[m_currentIdx - 1];
+    }
+
+    size_t GetRecordCount() const
+    {
+        return m_recordCount;
+    }
+
+    RetStatus AddRecord(const HealthSnapshot &snapshot)
+    {
+        if (m_records == nullptr || m_recordCount >= m_maxRecords) {
+            return DSTORE_FAIL;
+        }
+        m_records[m_recordCount++] = snapshot;
+        return DSTORE_SUCC;
+    }
 
 private:
     HealthSnapshot *m_records;

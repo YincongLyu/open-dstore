@@ -28,8 +28,8 @@ Each returned record must contain:
 ## Behavioral Rules
 
 - One record is returned for each active monitored entry.
-- A distinct record or signal is returned for watchdog self-health when applicable.
-- If no entries are registered, the query returns an empty result set.
+- A distinct watchdog self-health record is always returned as part of the snapshot.
+- If no peer entries are registered, the query still returns the self-health record.
 - The contract is read-only in first release; no acknowledge/reset/retention operations are included.
 
 ## Compatibility Notes
