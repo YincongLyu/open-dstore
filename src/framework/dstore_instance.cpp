@@ -69,6 +69,7 @@
 #include "framework/dstore_instance.h"
 #include "lock/dstore_lock_datatype.h"
 #include "buffer/dstore_buf.h"
+#include "framework/dstore_watchdog_mgr.h"
 
 namespace DSTORE {
 
@@ -2231,12 +2232,30 @@ void StorageInstance::StartBgThreads()
     if (STORAGE_VAR_NULL(m_updateCsnMinThread)) {
         ErrLog(DSTORE_PANIC, MODULE_FRAMEWORK, ErrMsg("Failed to start csn min thread."));
     }
+    if (m_guc != nullptr && m_guc->enableWatchdog) {
+        RetStatus ret = InitWatchDogMgr();
+        if (STORAGE_FUNC_FAIL(ret)) {
+            ErrLog(DSTORE_ERROR, MODULE_FRAMEWORK, ErrMsg("Failed to initialize watchdog manager."));
+        } else {
+            WatchDogMgr *mgr = GetWatchDogMgr();
+            if (mgr != nullptr) {
+                mgr->SetEnabled(m_guc->enableWatchdog);
+                mgr->SetHealingEnabled(m_guc->enableWatchdogHealing);
+                mgr->SetCheckIntervalMs(m_guc->watchdogCheckIntervalMs);
+                ret = mgr->Start();
+                if (STORAGE_FUNC_FAIL(ret)) {
+                    ErrLog(DSTORE_ERROR, MODULE_FRAMEWORK, ErrMsg("Failed to start watchdog manager."));
+                }
+            }
+        }
+    }
 #endif
 }
 
 void StorageInstance::StopBgThreads()
 {
     m_stopBgThread = true;
+    DestroyWatchDogMgr();
     if (m_updateCsnMinThread != nullptr) {
         m_updateCsnMinThread->join();
         delete m_updateCsnMinThread;

@@ -293,6 +293,9 @@ struct StorageGUC {
     bool enableTrackIOTiming;
     double candidateSafePercent;
     uint32_t lruScanDepth;
+    bool enableWatchdog;
+    bool enableWatchdogHealing;
+    uint32_t watchdogCheckIntervalMs;
 };
 
 enum class StorageInstanceType : uint8_t {
